@@ -1,0 +1,1 @@
+export type ContentTypes = "application/json" | "application/jsoff" | "application/xml" | "'text/xml'" | "text/xml" | "text/html" | "text/plain" | "text/json"
