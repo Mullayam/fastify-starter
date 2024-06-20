@@ -2,19 +2,17 @@ import "dotenv/config";
 import { FastifyInstance } from "fastify"
 import { bootstrap } from "./src/app"
 import { CONFIG } from "./src/config";
-// import { join } from "path"; 
-// Application
-const app: FastifyInstance = bootstrap.AppServer.InitailizeApplication()
-
-const PORT: string | number = CONFIG.port
+import { Logging } from "./src/utils/logs";
+// import { join } from "path";
 
 function main() {
+    const app: FastifyInstance = bootstrap.AppServer.InitailizeApplication()
+    const PORT: string | number = CONFIG.port
     app.listen({ port: Number(PORT) }, (err) => {
         if (err) {
-            app.log.error(err);
+            Logging.dev(err.message, "error");
             process.exit(1)
         }
-        app.log.info(`server listening on ${PORT}`)
     })
     // app.register(require('@fastify/static'), {
     //     root: join(__dirname, 'public'),

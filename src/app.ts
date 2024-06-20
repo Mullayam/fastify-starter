@@ -1,19 +1,20 @@
-// import { join } from 'path';
-// import AutoLoad from '@fastify/autoload';
-import fastifyPassport from '@fastify/passport';
+import { join } from 'path';
+import AutoLoad from '@fastify/autoload';
+// import fastifyPassport from '@fastify/passport';
 import fastifyCookie from '@fastify/cookie';
-import fastifySession from '@fastify/session';
+// import fastifySession from '@fastify/session';
 import fastifyFormBody from '@fastify/formbody';
-// import mercurius from 'mercurius'
-// import AltairFastify, { AltairFastifyPluginOptions } from 'altair-fastify-plugin'
 import fastify, { FastifyInstance, FastifyServerOptions } from 'fastify';
+// import fastifyPrintRoutes from 'fastify-print-routes'
 import { CustomError } from './utils/libs/errors/customError';
 import { Logging } from './utils/logs';
 
 const options: FastifyServerOptions = {
-  logger: true,
-
-
+  logger: {
+    transport: {
+      target: "@fastify/one-line-logger",      
+    },
+  },
 }
 class Application {
   private app: FastifyInstance = fastify(options)
@@ -28,41 +29,54 @@ class Application {
   }
   private ApplyConfiguration() {
     this.app.register(fastifyCookie);
-    this.app.register(fastifySession, {
-      secret: process.env.SESSION_SECRET || 'fallback-session-secrefallback-session-secrefallback-session-secret', // Use the environment variable or a fallback secret
-      cookie: { secure: !!process.env.USE_HTTPS || false }, // Set to true if using HTTPS
-      saveUninitialized: false,
-      cookieName: 'sessionId',
-    });
+    // this.app.register(fastifySession, {
+    //   secret: process.env.SESSION_SECRET || 'fallback-session-secrefallback-session-secrefallback-session-secret', // Use the environment variable or a fallback secret
+    //   cookie: { secure: !!process.env.USE_HTTPS || false }, // Set to true if using HTTPS
+    //   saveUninitialized: false,
+    //   cookieName: 'sessionId',
+    // });
 
     this.app.register(fastifyFormBody);
-    this.app.register(fastifyPassport.initialize());
-    this.app.register(fastifyPassport.secureSession());
-    // this.app.register(mercurius, createMercuriusOptions(server));
-    // this.app.register(AltairFastify, createAltairConfigurations())
-   
+    // this.app.register(fastifyPassport.initialize());
+    // this.app.register(fastifyPassport.secureSession());
+
   }
   private LoadPlugins() {
-    // this.app.register(require('fastify-graceful-shutdown'))
+    this.app.register(require('fastify-graceful-shutdown'))
     // // This loads all plugins defined in plugins those should be support plugins that are reused through your application
-    // this.app.register(AutoLoad, {
-    //   dir: join(__dirname, 'plugins'),
-    //   options: Object.assign({}, opts),
-    //   ignorePattern: /.*(model|schema)\.js/
-    // })
+    this.app.register(AutoLoad, {
+      dir: join(__dirname, 'plugins'),
+      ignorePattern: /.*(model|schema)\.js/
+    })
   }
   private InitMiddlewares() { }
   private RegisterRoutes() {
-    // // This loads all plugins defined in routes  define your routes in one of these
-    // this.app.register(AutoLoad, {
-    //   dir: join(__dirname, 'routes'),
-    //   prefix: '/api',
-    //   // options: opts
-    // })
+    // This loads all plugins defined in routes  define your routes in one of these
+    this.app.register(AutoLoad, { dir: join(__dirname, 'routes') })
   }
   private ExceptionHandler() {
+    this.app.setNotFoundHandler({
+    }, function (request, reply) {
+      reply.code(404).send({
+        success: false, message: "Not Found", stack:
+        {
+          code: 404,
+          info: `Route ${request.method} ${request.url} Not Found`
+        }
+      })
+    })
     this.app.setErrorHandler((error, request, reply) => {
       const customError: CustomError = error;
+      if (error.statusCode === 429) {
+        return reply.status(429).send({
+          error: {
+            message: "You hit the rate limit! Slow down please!",
+            code: customError.code,
+            data: customError.data,
+          }
+        })
+
+      }
       reply.status(customError.statusCode || 500).send({
         error: {
           message: customError.message,
@@ -73,6 +87,7 @@ class Application {
     })
   };
   InitailizeApplication(): FastifyInstance {
+    // this.app.register(fastifyPrintRoutes)
     return this.app
 
   }
@@ -81,7 +96,7 @@ class Application {
       .addHook("preClose", this.CloseFastify)
       .addHook("onClose", this.smoothlyClose)
       .addHook("onReady", () => {
-        console.log("App is Ready")
+        Logging.dev("App is Ready")
         this.GracefulShutdown()
       })
       .addHook("onError", () => console.log("Got An Error"))
@@ -98,12 +113,10 @@ class Application {
   private GracefulShutdown() {
     process.on('SIGINT', () => {
       Logging.dev("Manually Shutting Down", "notice")
-
       process.exit(1);
     })
     process.on('SIGTERM', () => {
-      // Logging.dev("Error Occured", "error")
-
+      Logging.dev("Error Occured", "error")
       process.exit(1);
     })
     process.on('uncaughtException', (err, origin) => {
@@ -117,10 +130,7 @@ class Application {
   }
   private smoothlyClose() {
     this.app.after(() => {
-      // this.app.gracefulShutdown((signal, next) => {
       this.app.log.info('Received signal to shutdown: %s', "signal")
-      //   next()
-      // })
     })
   }
 }

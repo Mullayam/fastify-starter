@@ -14,7 +14,24 @@ export default fp<RateLimitOptions>(
     opts = {
       max: 100,
       timeWindow: '1 minute',
+      allowList: function (request, key) {
+        return request.headers['x-app-client-id'] === 'internal-usage'
+      },
+      errorResponseBuilder: function (request, context) {
+        return {
+          success: false,
+          message: "You hit the rate limit! Slow down please!",
+          stack: {
+            statusCode: 429,
+            error: 'Too Many Requests',
+            message: `I only allow ${context.max} requests per ${context.after} to this Website. Try again soon.`,
+            date: Date.now(),
+            expiresIn: context.ttl // milliseconds
+          }
+        }
+      }
     },
+
   ) => {
     await fastify.register(rateLimit, {
       ...opts,
